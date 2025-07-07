@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-GSTREAMER1_VERSION = 1.12.4
+GSTREAMER1_VERSION = 1.14.4
 GSTREAMER1_SOURCE = gstreamer-$(GSTREAMER1_VERSION).tar.xz
 GSTREAMER1_SITE = https://gstreamer.freedesktop.org/src/gstreamer
 GSTREAMER1_INSTALL_STAGING = YES
@@ -17,6 +17,7 @@ GSTREAMER1_CONF_OPTS = \
 	--disable-failing-tests \
 	--disable-valgrind \
 	--disable-benchmarks \
+	--disable-introspection \
 	$(if $(BR2_PACKAGE_GSTREAMER1_CHECK),,--disable-check) \
 	$(if $(BR2_PACKAGE_GSTREAMER1_TRACE),,--disable-trace) \
 	$(if $(BR2_PACKAGE_GSTREAMER1_PARSE),,--disable-parse) \
@@ -30,5 +31,12 @@ GSTREAMER1_DEPENDENCIES = \
 	host-pkgconf \
 	libglib2 \
 	$(if $(BR2_PACKAGE_LIBUNWIND),libunwind)
+
+define GSTREAMER1_INSTALL_TARGET_ENV
+	$(INSTALL) -D -m 0644 $(GSTREAMER1_PKGDIR)/gst.sh \
+		$(TARGET_DIR)/etc/profile.d/gst.sh
+endef
+
+GSTREAMER1_POST_INSTALL_TARGET_HOOKS += GSTREAMER1_INSTALL_TARGET_ENV
 
 $(eval $(autotools-package))

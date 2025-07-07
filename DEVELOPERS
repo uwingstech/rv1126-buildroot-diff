@@ -44,6 +44,7 @@ F:	package/gstreamer1/gst1-vaapi/
 F:	package/imx-usb-loader/
 F:	package/janus-gateway/
 F:	package/json-for-modern-cpp/
+F:	package/libasio/
 F:	package/libcpprestsdk/
 F:	package/libressl/
 F:	package/libselinux/
@@ -167,7 +168,6 @@ N:	Arnout Vandecappelle <arnout@mind.be>
 F:	package/arp-scan/
 F:	package/freescale-imx/firmware-imx/
 F:	package/freescale-imx/imx-lib/
-F:	package/gstreamer/gst-fsl-plugins/
 F:	package/lua-bit32/
 F:	package/owfs/
 F:	package/python-bottle/
@@ -757,7 +757,6 @@ F:	package/gr-osmosdr/
 F:	package/libusbgx/
 F:	package/python-cheetah/
 F:	package/python-markdown/
-F:	package/python-pyqt/
 F:	package/python-remi/
 F:	package/python-sip/
 
@@ -1482,6 +1481,9 @@ F:	package/subversion/
 N:	RJ Ascani <rj.ascani@gmail.com>
 F:	package/azmq/
 
+N:	Robert Rose <robertroyrose@gmail.com>
+F:	package/grpc/
+
 N:	Rodrigo Rebello <rprebello@gmail.com>
 F:	package/chocolate-doom/
 F:	package/irssi/
@@ -1524,6 +1526,7 @@ F:	package/python-pysnmp/
 F:	package/python-pysnmp-apps/
 F:	package/python-pysnmp-mibs/
 F:	package/python-tornado/
+F:	package/websocketpp/
 
 N:	Ryan Coe <bluemrp9@gmail.com>
 F:	package/inadyn/
@@ -1670,7 +1673,6 @@ F:	package/cache-calibrator/
 F:	package/gtest/
 F:	package/mtdev/
 F:	package/mtdev2tuio/
-F:	package/qtuio/
 
 N:	Steve Calfee <stevecalfee@gmail.com>
 F:	package/python-pymysql/
@@ -1700,6 +1702,7 @@ F:	package/lcdproc/
 
 N:	Sven Neumann <neumann@teufel.de>
 F:	package/gstreamer1/gst1-libav/
+F:	package/wampcc/
 
 N:	Sven Neumann <s.neumann@raumfeld.com>
 F:	package/glib-networking/
@@ -1881,6 +1884,7 @@ F:	package/linux-firmware/
 F:	package/linux-tools/
 F:	package/matchbox*
 F:	package/mesa3d-headers/
+F:	package/mke2img/
 F:	package/nbd/
 F:	package/nut/
 F:	package/nvidia-driver/

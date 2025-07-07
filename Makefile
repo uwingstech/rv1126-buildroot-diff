@@ -36,7 +36,11 @@ SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 # or avoid confusing packages that can use the O=<dir> syntax for out-of-tree
 # build by preventing it from being forwarded to sub-make calls.
 ifneq ("$(origin O)", "command line")
+ifneq ($(TARGET_OUTPUT_DIR),)
+O := $(TARGET_OUTPUT_DIR)
+else
 O := $(CURDIR)/output
+endif
 endif
 
 # Check if the current Buildroot execution meets all the pre-requisites.
@@ -355,8 +359,14 @@ export HOSTARCH := $(shell LC_ALL=C $(HOSTCC_NOCCACHE) -v 2>&1 | \
 	    -e 's/macppc/powerpc/' \
 	    -e 's/sh.*/sh/' )
 
-HOSTCC_VERSION := $(shell $(HOSTCC_NOCCACHE) --version | \
-	sed -n -r 's/^.* ([0-9]*)\.([0-9]*)\.([0-9]*)[ ]*.*/\1 \2/p')
+# When adding a new host gcc version in Config.in,
+# update the HOSTCC_MAX_VERSION variable:
+HOSTCC_MAX_VERSION := 9
+
+HOSTCC_VERSION := $(shell V=$$($(HOSTCC_NOCCACHE) --version | \
+	sed -n -r 's/^.* ([0-9]*)\.([0-9]*)\.([0-9]*)[ ]*.*/\1 \2/p'); \
+	[ "$${V%% *}" -le $(HOSTCC_MAX_VERSION) ] || V=$(HOSTCC_MAX_VERSION); \
+	printf "%s" "$${V}")
 
 # For gcc >= 5.x, we only need the major version.
 ifneq ($(firstword $(HOSTCC_VERSION)),4)
@@ -396,6 +406,7 @@ unexport CPP
 unexport RANLIB
 unexport CFLAGS
 unexport CXXFLAGS
+unexport UNZIP
 unexport GREP_OPTIONS
 unexport TAR_OPTIONS
 unexport CONFIG_SITE
@@ -404,6 +415,8 @@ unexport TERMINFO
 unexport MACHINE
 unexport O
 unexport GCC_COLORS
+unexport PLATFORM
+unexport OS
 
 GNU_HOST_NAME := $(shell support/gnuconfig/config.guess)
 
@@ -481,9 +494,9 @@ include Makefile.legacy
 
 include system/system.mk
 include package/Makefile.in
-# arch/arch.mk.* must be after package/Makefile.in because it may need to
+# arch/arch.mk must be after package/Makefile.in because it may need to
 # complement variables defined therein, like BR_NO_CHECK_HASH_FOR.
--include $(sort $(wildcard arch/arch.mk.*))
+include arch/arch.mk
 include support/dependencies/dependencies.mk
 
 PACKAGES += $(DEPENDENCIES_HOST_PREREQ)
@@ -562,6 +575,13 @@ sdk: world
 	$(TOPDIR)/support/scripts/fix-rpath staging
 	$(INSTALL) -m 755 $(TOPDIR)/support/misc/relocate-sdk.sh $(HOST_DIR)/relocate-sdk.sh
 	echo $(HOST_DIR) > $(HOST_DIR)/share/buildroot/sdk-location
+
+.PHONY: reinstall
+clean-for-reinstall: $(patsubst %,%-clean-for-reinstall,$(PACKAGES))
+	rm -rf $(TARGET_DIR) $(BINARIES_DIR) $(HOST_DIR)
+	find $(BUILD_DIR) -name ".stamp_*_installed" -delete
+
+reinstall: clean-for-reinstall all
 
 # Compatibility symlink in case a post-build script still uses $(HOST_DIR)/usr
 $(HOST_DIR)/usr: $(HOST_DIR)
@@ -718,10 +738,14 @@ endif
 # debugging symbols.
 	find $(TARGET_DIR)/lib/ -type f -name 'ld-*.so*' | \
 		xargs -r $(STRIPCMD) $(STRIP_STRIP_DEBUG)
+
+ifneq ($(BR2_TOOLCHAIN_USES_GLIBC),y)
 	test -f $(TARGET_DIR)/etc/ld.so.conf && \
 		{ echo "ERROR: we shouldn't have a /etc/ld.so.conf file"; exit 1; } || true
 	test -d $(TARGET_DIR)/etc/ld.so.conf.d && \
 		{ echo "ERROR: we shouldn't have a /etc/ld.so.conf.d directory"; exit 1; } || true
+endif
+
 	mkdir -p $(TARGET_DIR)/etc
 	( \
 		echo "NAME=Buildroot"; \
@@ -731,6 +755,13 @@ endif
 		echo "PRETTY_NAME=\"Buildroot $(BR2_VERSION)\"" \
 	) >  $(TARGET_DIR)/usr/lib/os-release
 	ln -sf ../usr/lib/os-release $(TARGET_DIR)/etc
+	( \
+		echo "RK_MODEL=$(RK_MODEL)"; \
+		echo "RK_VERSION=$(RK_VERSION)"; \
+		echo "RK_OTA_HOST=$(RK_OTA_HOST)"; \
+		echo "LINUX_BUILDROOT_COMMIT=$(shell git log -1 | grep "commit" | awk -F ' ' '{print $$2}')"; \
+		echo "XML_NAME=$(notdir $(realpath ../.repo/manifest.xml))"; \
+	) >  $(TARGET_DIR)/etc/version
 
 	@$(call MESSAGE,"Sanitizing RPATH in target tree")
 	$(TOPDIR)/support/scripts/fix-rpath target
@@ -753,7 +784,6 @@ target-post-image: $(TARGETS_ROOTFS) target-finalize
 
 .PHONY: source
 source: $(foreach p,$(PACKAGES),$(p)-all-source)
-
 .PHONY: _external-deps external-deps
 _external-deps: $(foreach p,$(PACKAGES),$(p)-all-external-deps)
 external-deps:
@@ -917,16 +947,22 @@ defconfig: $(BUILD_DIR)/buildroot-config/conf prepare-kconfig
 define percent_defconfig
 # Override the BR2_DEFCONFIG from COMMON_CONFIG_ENV with the new defconfig
 %_defconfig: $(BUILD_DIR)/buildroot-config/conf $(1)/configs/%_defconfig prepare-kconfig
-	@$$(COMMON_CONFIG_ENV) BR2_DEFCONFIG=$(1)/configs/$$@ \
-		$$< --defconfig=$(1)/configs/$$@ $$(CONFIG_CONFIG_IN)
+	$(TOPDIR)/build/defconfig_hook.py -m $(1)/configs/$$@ $(BASE_DIR)/.rockchipconfig
+	$$(COMMON_CONFIG_ENV) BR2_DEFCONFIG=$(1)/configs/$$@ \
+		$$< --defconfig=$(BASE_DIR)/.rockchipconfig $$(CONFIG_CONFIG_IN)
 endef
 $(eval $(foreach d,$(call reverse,$(TOPDIR) $(BR2_EXTERNAL_DIRS)),$(call percent_defconfig,$(d))$(sep)))
 
+CFG_ := $(if $(DEFCONFIG),$(DEFCONFIG),$(CONFIG_DIR)/defconfig)
 savedefconfig: $(BUILD_DIR)/buildroot-config/conf prepare-kconfig
-	@$(COMMON_CONFIG_ENV) $< \
-		--savedefconfig=$(if $(DEFCONFIG),$(DEFCONFIG),$(CONFIG_DIR)/defconfig) \
-		$(CONFIG_CONFIG_IN)
-	@$(SED) '/BR2_DEFCONFIG=/d' $(if $(DEFCONFIG),$(DEFCONFIG),$(CONFIG_DIR)/defconfig)
+	grep "#include" $(CFG_) > $(CFG_).split || true
+
+	@$(COMMON_CONFIG_ENV) $< --savedefconfig=$(CFG_) $(CONFIG_CONFIG_IN)
+	@$(SED) '/BR2_DEFCONFIG=/d' $(CFG_)
+
+	cat $(CFG_) >> $(CFG_).split
+	$(TOPDIR)/build/defconfig_hook.py -s $(CFG_).split $(CFG_)
+	rm $(CFG_).split
 
 .PHONY: defconfig savedefconfig
 
@@ -991,6 +1027,7 @@ help:
 	@echo '  all                    - make world'
 	@echo '  toolchain              - build toolchain'
 	@echo '  sdk                    - build relocatable SDK'
+	@echo '  reinstall              - reinstall all'
 	@echo
 	@echo 'Configuration:'
 	@echo '  menuconfig             - interactive curses-based configurator'

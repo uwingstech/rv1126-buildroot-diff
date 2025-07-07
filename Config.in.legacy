@@ -143,6 +143,17 @@ comment "----------------------------------------------------"
 endif
 
 ###############################################################################
+
+comment "Legacy options removed in 2020.02"
+
+config BR2_PACKAGE_GSTREAMER
+	bool "gstreamer-0.10 removed"
+	select BR2_LEGACY
+	help
+	  Gstreamer-0.10 package was removed. It has been deprecated
+	  upstream since 2012, and is missing a lot of features and
+	  fixes compared to gstreamer-1.x.
+
 comment "Legacy options removed in 2018.02"
 
 config BR2_KERNEL_HEADERS_3_4
@@ -378,13 +389,6 @@ config BR2_XTENSA_CUSTOM_NAME_WRAP
 	default y if BR2_XTENSA_CUSTOM_NAME != ""
 	select BR2_LEGACY
 
-config BR2_PACKAGE_HOST_MKE2IMG
-	bool "host mke2img has been removed"
-	select BR2_LEGACY
-	help
-	  We now call mkfs directly to generate ext2/3/4 filesystem
-	  image, so mke2img is no longer necessary.
-
 config BR2_TARGET_ROOTFS_EXT2_BLOCKS
 	int "exact size in blocks has been removed"
 	default 0
@@ -474,16 +478,6 @@ config BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_SDL
 config BR2_PACKAGE_GST1_PLUGINS_UGLY_PLUGIN_MAD
 	bool "mad (*.mp3 audio) removed"
 	select BR2_LEGACY
-
-config BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_WEBRTC
-	bool "gst1-plugins-bad webrtc renamed to webrtcdsp"
-	select BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_WEBRTCDSP
-	select BR2_LEGACY
-	help
-	  The WebRTC plugin in GStreamer 1.x has always been named
-	  webrtcdsp, but was wrongly introduced in Buildroot under the
-	  name webrtc. Therefore, we have renamed the option to match
-	  the actual name of the GStreamer plugin.
 
 config BR2_STRIP_none
 	bool "Strip command 'none' has been removed"
@@ -1050,15 +1044,6 @@ config BR2_PACKAGE_ELEMENTARY
 	help
 	  With EFL 1.18, elementary is now provided by the efl package.
 
-config BR2_LINUX_KERNEL_CUSTOM_LOCAL
-	bool "Linux kernel local directory option removed"
-	help
-	  The option to select a local directory as the source of the Linux
-	  kernel has been removed. It hurts reproducibility of builds.
-
-	  In case you were using this option during development of your
-	  Linux kernel, use the override mechanism instead.
-
 ###############################################################################
 comment "Legacy options removed in 2016.08"
 
@@ -1594,16 +1579,6 @@ config BR2_PACKAGE_BLACKBOX
 	help
 	  Upstream is dead and the package has been deprecated for
 	  some time. There are other alternative maintained WMs.
-
-config BR2_KERNEL_HEADERS_3_0
-	bool "kernel headers version 3.0.x are no longer supported"
-	select BR2_KERNEL_HEADERS_3_2
-	select BR2_LEGACY
-	help
-	  Version 3.0.x of the Linux kernel headers have been deprecated
-	  for more than four buildroot releases and are now removed.
-	  As an alternative, version 3.2.x of the headers have been
-	  automatically selected in your configuration.
 
 config BR2_KERNEL_HEADERS_3_11
 	bool "kernel headers version 3.11.x are no longer supported"

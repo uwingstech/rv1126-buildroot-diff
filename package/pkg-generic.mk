@@ -57,53 +57,32 @@ GLOBAL_INSTRUMENTATION_HOOKS += step_time
 
 # Hooks to collect statistics about installed files
 
-define _step_pkg_size_get_file_list
-	(cd $(2) ; \
-		( \
-			find . -xtype f -print0 | xargs -0 md5sum ; \
-			find . -xtype d -print0 | xargs -0 -I{} printf 'directory  {}\n'; \
-		) \
-	) | sort > $1
-endef
-
-# This hook will be called before the installation of a package. We store in
-# a file named .br_filelist_before the list of files currently installed.
-# Note that the MD5 is also stored, in order to identify if the files are
-# overwritten.
-# $(1): package name (ignored)
-# $(2): base directory to search in
-define step_pkg_size_start
-	$(call _step_pkg_size_get_file_list,$($(PKG)_DIR)/.br_filelist_before,$(2))
-endef
-
-# This hook will be called after the installation of a package. We store in
-# a file named .br_filelist_after the list of files (and their MD5) currently
-# installed. We then do a diff with the .br_filelist_before to compute the
-# list of files installed by this package.
 # The suffix is typically empty for the target variant, for legacy backward
 # compatibility.
-# $(1): package name (ignored)
+# $(1): package name
 # $(2): base directory to search in
 # $(3): suffix of file  (optional)
-define step_pkg_size_end
-	$(call _step_pkg_size_get_file_list,$($(PKG)_DIR)/.br_filelist_after,$(2))
-	comm -13 $($(PKG)_DIR)/.br_filelist_before $($(PKG)_DIR)/.br_filelist_after | \
-		while read hash file ; do \
-			echo "$(1),$${file}" ; \
-		done >> $(BUILD_DIR)/packages-file-list$(3).txt
-	rm -f $($(PKG)_DIR)/.br_filelist_before $($(PKG)_DIR)/.br_filelist_after
+define step_pkg_size_inner
+	cd $(2); \
+	find . \( -type f -o -type l \) \
+		-cnewer $($(PKG)_DIR)/.stamp_built \
+		-exec printf '$(1),%s\n' {} + \
+		>> $(BUILD_DIR)/packages-file-list$(3).txt
+
+	if [ -z "$(3)" ]; then \
+		grep "^$(1)," $(BUILD_DIR)/packages-file-list$(3).txt | \
+			cut -d',' -f 2- | sort | uniq | \
+			tar --no-recursion --ignore-failed-read -cf $($(PKG)_DIR)/$($(PKG)_BASE_NAME).tar -C $(TARGET_DIR) -T -; true; \
+	fi
 endef
 
 define step_pkg_size
 	$(if $(filter install-target,$(2)),\
-		$(if $(filter start,$(1)),$(call step_pkg_size_start,$(3),$(TARGET_DIR))) \
-		$(if $(filter end,$(1)),$(call step_pkg_size_end,$(3),$(TARGET_DIR))))
+		$(if $(filter end,$(1)),$(call step_pkg_size_inner,$(3),$(TARGET_DIR))))
 	$(if $(filter install-staging,$(2)),\
-		$(if $(filter start,$(1)),$(call step_pkg_size_start,$(3),$(STAGING_DIR),-staging)) \
-		$(if $(filter end,$(1)),$(call step_pkg_size_end,$(3),$(STAGING_DIR),-staging)))
+		$(if $(filter end,$(1)),$(call step_pkg_size_inner,$(3),$(STAGING_DIR),-staging)))
 	$(if $(filter install-host,$(2)),\
-		$(if $(filter start,$(1)),$(call step_pkg_size_start,$(3),$(HOST_DIR),-host)) \
-		$(if $(filter end,$(1)),$(call step_pkg_size_end,$(3),$(HOST_DIR),-host)))
+		$(if $(filter end,$(1)),$(call step_pkg_size_inner,$(3),$(HOST_DIR),-host)))
 endef
 GLOBAL_INSTRUMENTATION_HOOKS += step_pkg_size
 
@@ -197,6 +176,8 @@ $(BUILD_DIR)/%/.stamp_rsynced:
 	rsync -au --chmod=u=rwX,go=rX $(RSYNC_VCS_EXCLUSIONS) $(call qstrip,$(SRCDIR))/ $(@D)
 	$(foreach hook,$($(PKG)_POST_RSYNC_HOOKS),$(call $(hook))$(sep))
 	$(Q)touch $@
+	@test -d $(SRCDIR)/.git && (cd $(SRCDIR) && git status --ignored -s | \
+		grep "" && echo "WARN: $(SRCDIR) is dirty!") || true
 
 # Patch
 #
@@ -205,7 +186,7 @@ $(BUILD_DIR)/%/.stamp_rsynced:
 # prefix of the patches
 #
 # For BR2_GLOBAL_PATCH_DIR, only generate if it is defined
-$(BUILD_DIR)/%/.stamp_patched: PATCH_BASE_DIRS =  $(PKGDIR)
+$(BUILD_DIR)/%/.stamp_patched: PATCH_BASE_DIRS =  $(PKGDIR) $($(PKG)_PATCH_DIRS)
 $(BUILD_DIR)/%/.stamp_patched: PATCH_BASE_DIRS += $(addsuffix /$(RAWNAME),$(call qstrip,$(BR2_GLOBAL_PATCH_DIR)))
 $(BUILD_DIR)/%/.stamp_patched:
 	@$(call step_start,patch)
@@ -254,6 +235,7 @@ $(BUILD_DIR)/%/.stamp_built::
 
 # Install to host dir
 $(BUILD_DIR)/%/.stamp_host_installed:
+	touch $($(PKG)_TARGET_BUILD)
 	@$(call step_start,install-host)
 	@$(call MESSAGE,"Installing to host directory")
 	$(foreach hook,$($(PKG)_PRE_INSTALL_HOOKS),$(call $(hook))$(sep))
@@ -447,6 +429,12 @@ else
  $(2)_DL_VERSION := $$(strip $$($(2)_VERSION))
 endif
 $(2)_VERSION := $$(call sanitize,$$($(2)_DL_VERSION))
+
+$(2)_HASH_FILE = \
+	$$(strip \
+		$$(if $$(wildcard $$($(2)_PKGDIR)/$$($(2)_VERSION)/$$($(2)_RAWNAME).hash),\
+			$$($(2)_PKGDIR)/$$($(2)_VERSION)/$$($(2)_RAWNAME).hash,\
+			$$($(2)_PKGDIR)/$$($(2)_RAWNAME).hash))
 
 ifdef $(3)_OVERRIDE_SRCDIR
   $(2)_OVERRIDE_SRCDIR ?= $$($(3)_OVERRIDE_SRCDIR)
@@ -784,6 +772,7 @@ endif
 			rm -f $$($(2)_TARGET_INSTALL_TARGET)
 			rm -f $$($(2)_TARGET_INSTALL_IMAGES)
 			rm -f $$($(2)_TARGET_INSTALL_HOST)
+			touch $$($(2)_TARGET_BUILD) || true
 
 $(1)-reinstall:		$(1)-clean-for-reinstall $(1)
 

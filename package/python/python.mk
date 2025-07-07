@@ -5,7 +5,7 @@
 ################################################################################
 
 PYTHON_VERSION_MAJOR = 2.7
-PYTHON_VERSION = $(PYTHON_VERSION_MAJOR).14
+PYTHON_VERSION = $(PYTHON_VERSION_MAJOR).16
 PYTHON_SOURCE = Python-$(PYTHON_VERSION).tar.xz
 PYTHON_SITE = https://python.org/ftp/python/$(PYTHON_VERSION)
 PYTHON_LICENSE = Python-2.0, others
@@ -32,7 +32,6 @@ HOST_PYTHON_CONF_OPTS += \
 	--disable-bsddb \
 	--disable-test-modules \
 	--disable-bz2 \
-	--disable-ssl \
 	--disable-ossaudiodev \
 	--disable-pyo-build
 
@@ -56,7 +55,7 @@ HOST_PYTHON_MAKE = $(MAKE1)
 
 PYTHON_DEPENDENCIES = host-python libffi $(TARGET_NLS_DEPENDENCIES)
 
-HOST_PYTHON_DEPENDENCIES = host-expat host-zlib
+HOST_PYTHON_DEPENDENCIES = host-expat host-zlib host-openssl
 
 PYTHON_INSTALL_STAGING = YES
 
